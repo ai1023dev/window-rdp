@@ -136,14 +136,11 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// 위로 스크롤 (negative value)
 			if direction == "up" {
-				robotgo.ScrollSmooth(-10, steps, 100)
+				robotgo.Click("wheelUp")
 				log.Printf("스크롤 위로: %d\n", steps)
-			}
-			// 아래로 스크롤 (positive value)
-			if direction == "down" {
-				robotgo.ScrollSmooth(10, steps, 100)
+			} else if direction == "down" {
+				robotgo.Click("wheelDown")
 				log.Printf("스크롤 아래로: %d\n", steps)
 			} else {
 				log.Println("잘못된 스크롤 방향:", direction)
@@ -151,11 +148,31 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		case "keydown":
 			key := strings.ToLower(param1) // 대문자를 자동으로 소문자로 변환
+			switch key {
+			case "arrowup":
+				key = "up"
+			case "arrowdown":
+				key = "down"
+			case "arrowleft":
+				key = "left"
+			case "arrowright":
+				key = "right"
+			}
 			robotgo.KeyToggle(key, "down")
 			log.Printf("키 누름: %s\n", key)
 
 		case "keyup":
 			key := strings.ToLower(param1)
+			switch key {
+			case "arrowup":
+				key = "up"
+			case "arrowdown":
+				key = "down"
+			case "arrowleft":
+				key = "left"
+			case "arrowright":
+				key = "right"
+			}
 			robotgo.KeyToggle(key, "up")
 			log.Printf("키 놓음: %s\n", key)
 
@@ -168,73 +185,77 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 // 서버 실행
 func main() {
 	http.HandleFunc("/ws", handleWebSocket)
-
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		html := `
-<!DOCTYPE html>
-<html>
-<head>
-	<title>원격 제어 웹</title>
-</head>
-<body>
-	<h1>실시간 화면 공유 및 원격 제어</h1>
-	<canvas id="screen" width="1280" height="720"></canvas>
-	<script>
-		const canvas = document.getElementById('screen');
-		const ctx = canvas.getContext('2d');
-		const ws = new WebSocket('ws://' + window.location.host + '/ws');
+		
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<title>원격 제어 웹</title>
+		</head>
+		<body>
+			<h1>실시간 화면 공유 및 원격 제어</h1>
+			<canvas id="screen" width="1280" height="720"></canvas>
+			<script>
+				const canvas = document.getElementById('screen');
+				const ctx = canvas.getContext('2d');
+				const ws = new WebSocket('ws://' + window.location.host + '/ws');
 
-		ws.binaryType = 'arraybuffer';
+				ws.binaryType = 'arraybuffer';
 
-		ws.onmessage = function(event) {
-			const img = new Image();
-			const blob = new Blob([event.data]);
-			img.src = URL.createObjectURL(blob);
-			img.onload = function() {
-				ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-			};
-		};
+				ws.onmessage = function(event) {
+					const img = new Image();
+					const blob = new Blob([event.data]);
+					img.src = URL.createObjectURL(blob);
+					img.onload = function() {
+						ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+					};
+				};
 
-		canvas.addEventListener('mousemove', function(event) {
-			const rect = canvas.getBoundingClientRect();
-			const xRatio = (event.clientX - rect.left) / canvas.width;
-			const yRatio = (event.clientY - rect.top) / canvas.height;
-			ws.send('mousemove:' + xRatio.toFixed(5) + ':' + yRatio.toFixed(5));
-		});
+				canvas.addEventListener('mousemove', function(event) {
+					const rect = canvas.getBoundingClientRect();
+					const xRatio = (event.clientX - rect.left) / canvas.width;
+					const yRatio = (event.clientY - rect.top) / canvas.height;
+					ws.send('mousemove:' + xRatio.toFixed(5) + ':' + yRatio.toFixed(5));
+				});
 
-		canvas.addEventListener('mousedown', function(event) {
-			const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : '';
-			if (button) ws.send('mousedown:' + button);
-		});
+				canvas.addEventListener('mousedown', function(event) {
+					const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : '';
+					if (button) ws.send('mousedown:' + button);
 
-		canvas.addEventListener('mouseup', function(event) {
-			const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : '';
-			if (button) ws.send('mouseup:' + button);
-		});
+					event.preventDefault();
+				});
 
-		canvas.addEventListener('wheel', function(event) {
-			const direction = event.deltaY > 0 ? 'down' : 'up';
-			let steps = Math.abs(event.deltaY);
+				canvas.addEventListener('mouseup', function(event) {
+					const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : '';
+					if (button) ws.send('mouseup:' + button);
 
-			// 스크롤 크기 조정 (예: deltaY 값이 너무 크면 나누기)
-			steps = Math.ceil(steps / 10);  // 스크롤 크기를 작게 조정
-			ws.send('scroll:' + direction + ':' + steps);
-			console.log('scroll:' + direction + ':' + steps)
+					event.preventDefault();
+				});
 
-			// 기본 동작 방지 (스크롤 동작 자체를 방지하려면 true를 리턴)
-			event.preventDefault();
-		});
+				canvas.addEventListener('wheel', function(event) {
+					const direction = event.deltaY > 0 ? 'down' : 'up';
+					console.log('scroll:' + direction)
 
-		document.addEventListener('keydown', function(event) {
-			ws.send('keydown:' + event.key.toLowerCase());
-		});
+					event.preventDefault();
+				});
 
-		document.addEventListener('keyup', function(event) {
-			ws.send('keyup:' + event.key.toLowerCase());
-		});
-	</script>
-</body>
-</html>`
+				document.addEventListener('keydown', function(event) {
+					ws.send('keydown:' + event.key.toLowerCase());
+
+					event.preventDefault();
+				});
+
+				document.addEventListener('keyup', function(event) {
+					ws.send('keyup:' + event.key.toLowerCase());
+
+					event.preventDefault();
+				});
+			</script>
+		</body>
+		</html>
+		
+		`
 		fmt.Fprint(w, html)
 	})
 
