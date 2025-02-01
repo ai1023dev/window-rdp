@@ -129,13 +129,25 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 
 		case "scroll":
-			scrollAmount, err := strconv.Atoi(param1)
+			direction := param1
+			steps, err := strconv.Atoi(param2) // 스크롤 스텝 크기
 			if err != nil {
-				log.Println("스크롤 값 변환 오류:", param1)
+				log.Println("스크롤 크기 변환 오류:", param2)
 				continue
 			}
-			robotgo.ScrollSmooth(scrollAmount)
-			log.Printf("스크롤 이동: %d\n", scrollAmount)
+
+			// 위로 스크롤 (negative value)
+			if direction == "up" {
+				robotgo.ScrollSmooth(-10, steps, 100)
+				log.Printf("스크롤 위로: %d\n", steps)
+			}
+			// 아래로 스크롤 (positive value)
+			if direction == "down" {
+				robotgo.ScrollSmooth(10, steps, 100)
+				log.Printf("스크롤 아래로: %d\n", steps)
+			} else {
+				log.Println("잘못된 스크롤 방향:", direction)
+			}
 
 		case "keydown":
 			key := strings.ToLower(param1) // 대문자를 자동으로 소문자로 변환
@@ -201,9 +213,11 @@ func main() {
 		});
 
 		canvas.addEventListener('wheel', function(event) {
-			const scrollAmount = event.deltaY > 0 ? -5 : 5;
-			ws.send('scroll:' + scrollAmount);
+			const direction = event.deltaY > 0 ? 'down' : 'up';
+			const steps = Math.abs(event.deltaY);  // 스크롤 크기
+			ws.send('scroll:'+direction+':'+steps);
 		});
+
 
 		document.addEventListener('keydown', function(event) {
 			ws.send('keydown:' + event.key.toLowerCase());
