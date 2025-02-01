@@ -39,78 +39,6 @@ func captureScreen() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// 키 변환 함수
-func parseKey(key string) string {
-	switch key {
-	case "A":
-		return "a"
-	case "B":
-		return "b"
-	case "C":
-		return "c"
-	case "D":
-		return "d"
-	case "E":
-		return "e"
-	case "F":
-		return "f"
-	case "G":
-		return "g"
-	case "H":
-		return "h"
-	case "I":
-		return "i"
-	case "J":
-		return "j"
-	case "K":
-		return "k"
-	case "L":
-		return "l"
-	case "M":
-		return "m"
-	case "N":
-		return "n"
-	case "O":
-		return "o"
-	case "P":
-		return "p"
-	case "Q":
-		return "q"
-	case "R":
-		return "r"
-	case "S":
-		return "s"
-	case "T":
-		return "t"
-	case "U":
-		return "u"
-	case "V":
-		return "v"
-	case "W":
-		return "w"
-	case "X":
-		return "x"
-	case "Y":
-		return "y"
-	case "Z":
-		return "z"
-	case "ENTER":
-		return "enter"
-	case "SPACE":
-		return "space"
-	case "SHIFT":
-		return "shift"
-	case "CTRL":
-		return "ctrl"
-	case "ALT":
-		return "alt"
-	case "TAB":
-		return "tab"
-	default:
-		return ""
-	}
-}
-
 // 웹소켓 핸들러
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -186,29 +114,38 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		case "mousedown":
 			if param1 == "left" || param1 == "right" {
-				robotgo.MouseClick(param1, false)
-				log.Printf("마우스 버튼 클릭: %s\n", param1)
+				robotgo.MouseDown(param1) // 마우스 버튼 누름
+				log.Printf("마우스 버튼 누름: %s\n", param1)
 			} else {
 				log.Println("잘못된 마우스 버튼:", param1)
 			}
 
-		case "keydown":
-			key := parseKey(param1)
-			if key != "" {
-				robotgo.KeyToggle(key, "down")
-				log.Printf("키 누름: %s\n", key)
+		case "mouseup":
+			if param1 == "left" || param1 == "right" {
+				robotgo.MouseUp(param1) // 마우스 버튼 놓음
+				log.Printf("마우스 버튼 놓음: %s\n", param1)
 			} else {
-				log.Println("잘못된 키 입력:", param1)
+				log.Println("잘못된 마우스 버튼:", param1)
 			}
 
-		case "keyup":
-			key := parseKey(param1)
-			if key != "" {
-				robotgo.KeyToggle(key, "up")
-				log.Printf("키 놓음: %s\n", key)
-			} else {
-				log.Println("잘못된 키 입력:", param1)
+		case "scroll":
+			scrollAmount, err := strconv.Atoi(param1)
+			if err != nil {
+				log.Println("스크롤 값 변환 오류:", param1)
+				continue
 			}
+			robotgo.ScrollSmooth(0, scrollAmount)
+			log.Printf("스크롤 이동: %d\n", scrollAmount)
+
+		case "keydown":
+			key := strings.ToLower(param1) // 대문자를 자동으로 소문자로 변환
+			robotgo.KeyToggle(key, "down")
+			log.Printf("키 누름: %s\n", key)
+
+		case "keyup":
+			key := strings.ToLower(param1)
+			robotgo.KeyToggle(key, "up")
+			log.Printf("키 놓음: %s\n", key)
 
 		default:
 			log.Printf("알 수 없는 액션: %s\n", action)
@@ -258,14 +195,22 @@ func main() {
 			if (button) ws.send('mousedown:' + button);
 		});
 
+		canvas.addEventListener('mouseup', function(event) {
+			const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : '';
+			if (button) ws.send('mouseup:' + button);
+		});
+
+		canvas.addEventListener('wheel', function(event) {
+			const scrollAmount = event.deltaY > 0 ? -5 : 5;
+			ws.send('scroll:' + scrollAmount);
+		});
+
 		document.addEventListener('keydown', function(event) {
-			const key = event.key.toUpperCase();
-			ws.send('keydown:' + key);
+			ws.send('keydown:' + event.key.toLowerCase());
 		});
 
 		document.addEventListener('keyup', function(event) {
-			const key = event.key.toUpperCase();
-			ws.send('keyup:' + key);
+			ws.send('keyup:' + event.key.toLowerCase());
 		});
 	</script>
 </body>
