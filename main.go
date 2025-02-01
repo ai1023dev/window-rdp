@@ -134,7 +134,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				log.Println("스크롤 값 변환 오류:", param1)
 				continue
 			}
-			robotgo.ScrollSmooth(0, scrollAmount)
+			robotgo.ScrollSmooth(scrollAmount)
 			log.Printf("스크롤 이동: %d\n", scrollAmount)
 
 		case "keydown":
