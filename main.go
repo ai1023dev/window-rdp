@@ -214,10 +214,16 @@ func main() {
 
 		canvas.addEventListener('wheel', function(event) {
 			const direction = event.deltaY > 0 ? 'down' : 'up';
-			const steps = Math.abs(event.deltaY);  // 스크롤 크기
-			ws.send('scroll:'+direction+':'+steps);
-		});
+			let steps = Math.abs(event.deltaY);
 
+			// 스크롤 크기 조정 (예: deltaY 값이 너무 크면 나누기)
+			steps = Math.ceil(steps / 10);  // 스크롤 크기를 작게 조정
+			ws.send('scroll:' + direction + ':' + steps);
+			console.log('scroll:' + direction + ':' + steps)
+
+			// 기본 동작 방지 (스크롤 동작 자체를 방지하려면 true를 리턴)
+			event.preventDefault();
+		});
 
 		document.addEventListener('keydown', function(event) {
 			ws.send('keydown:' + event.key.toLowerCase());
