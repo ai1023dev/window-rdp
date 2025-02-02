@@ -227,7 +227,7 @@ func main() {
 				});
 
 				document.addEventListener('wheel', function(event) {
-					const direction = event.deltaY > 0 ? 'down' : 'up';
+					const direction = event.deltaY > 0 ? 'up' : 'down';
 					ws.send('scroll:' + direction);
 
 					event.preventDefault();
