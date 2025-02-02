@@ -130,18 +130,13 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		case "scroll":
 			direction := param1
-			steps, err := strconv.Atoi(param2) // 스크롤 스텝 크기
-			if err != nil {
-				log.Println("스크롤 크기 변환 오류:", param2)
-				continue
-			}
 
 			if direction == "up" {
-				robotgo.Click("wheelUp")
-				log.Printf("스크롤 위로: %d\n", steps)
+				robotgo.Scroll(0, -1)
+				log.Printf("스크롤 위")
 			} else if direction == "down" {
-				robotgo.Click("wheelDown")
-				log.Printf("스크롤 아래로: %d\n", steps)
+				robotgo.Scroll(0, 1)
+				log.Printf("스크롤 아래")
 			} else {
 				log.Println("잘못된 스크롤 방향:", direction)
 			}
