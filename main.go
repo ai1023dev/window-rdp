@@ -129,16 +129,14 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 
 		case "scroll":
-			direction := param1
-
-			if direction == "up" {
+			if param1 == "up" {
 				robotgo.Scroll(0, -1)
 				log.Printf("스크롤 위")
-			} else if direction == "down" {
+			} else if param1 == "down" {
 				robotgo.Scroll(0, 1)
 				log.Printf("스크롤 아래")
 			} else {
-				log.Println("잘못된 스크롤 방향:", direction)
+				log.Println("잘못된 스크롤 방향:", param1)
 			}
 
 		case "keydown":
@@ -228,9 +226,9 @@ func main() {
 					event.preventDefault();
 				});
 
-				canvas.addEventListener('wheel', function(event) {
+				document.addEventListener('wheel', function(event) {
 					const direction = event.deltaY > 0 ? 'down' : 'up';
-					console.log('scroll:' + direction)
+					ws.send('scroll:' + direction);
 
 					event.preventDefault();
 				});
