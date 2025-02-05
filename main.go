@@ -130,10 +130,10 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		case "scroll":
 			if param1 == "up" {
-				robotgo.Scroll(0, -1)
+				robotgo.ScrollSmooth(0, -1, 100)
 				log.Printf("스크롤 위")
 			} else if param1 == "down" {
-				robotgo.Scroll(0, 1)
+				robotgo.ScrollSmooth(0, 1, 100)
 				log.Printf("스크롤 아래")
 			} else {
 				log.Println("잘못된 스크롤 방향:", param1)
