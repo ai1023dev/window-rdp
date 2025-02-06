@@ -1,113 +1,88 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
-	"time"
-
-	"github.com/gordonklaus/portaudio"
-	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v3"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
+const SCREEN_CAPTURE = "desktop" // 전체 화면을 캡처
+
+var ffmpegArgs = []string{
+	"-f", "gdigrab", // Windows에서 화면 캡처를 위한 gdigrab 사용
+	"-i", SCREEN_CAPTURE, // 화면 캡처 입력
+	"-c:v", "libx264", // 비디오 코덱 = libx264
+	"-crf", "23", // 비디오 품질 (23이 기본)
+	"-pix_fmt", "yuv420p", // 호환성 있는 픽셀 포맷
+	"-hls_time", "2", // HLS 세그먼트 길이
+	"-hls_list_size", "5", // 최대 리스트 크기 = 5
+	"-hls_delete_threshold", "1", // 세그먼트 최대 개수
+	"-hls_flags", "delete_segments", // 오래된 세그먼트 삭제
+	"-f", "hls", // 출력 포맷 = HLS
+	"public/video.m3u8", // HLS 출력 파일을 public 폴더에 저장
+}
+
 func main() {
-	portaudio.Initialize()
-	defer portaudio.Terminate()
+	// 기존 HLS 파일 삭제: *.ts, *.m3u8 파일 찾기
+	fmt.Println("Initialize video")
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/offer", handleOffer)
-
-	http.ListenAndServe(":8080", mux)
-}
-
-func handleOffer(w http.ResponseWriter, r *http.Request) {
-	// WebRTC offer 받기
-	var offer webrtc.SessionDescription
-	if err := json.NewDecoder(r.Body).Decode(&offer); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to decode offer: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	// *.ts 파일 삭제
+	tsFiles, err := filepath.Glob("public/*.ts")
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error creating peer connection: %v", err), http.StatusInternalServerError)
-		return
+		log.Fatal("Error finding .ts files: ", err)
 	}
-
-	// 트랙 생성 (NewTrackLocalStaticRTP 사용)
-	track, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus}, "audio", "pion")
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error creating track: %v", err), http.StatusInternalServerError)
-		return
-	}
-	_, err = peerConnection.AddTrack(track)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error adding track: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// 오디오 캡처 시작
-	go captureAudio(track)
-
-	// Offer를 PeerConnection에 설정
-	if err := peerConnection.SetRemoteDescription(offer); err != nil {
-		http.Error(w, fmt.Sprintf("Error setting remote description: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Answer 생성
-	answer, err := peerConnection.CreateAnswer(nil)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error creating answer: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// 생성된 Answer를 클라이언트로 반환
-	if err := peerConnection.SetLocalDescription(answer); err != nil {
-		http.Error(w, fmt.Sprintf("Error setting local description: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(answer); err != nil {
-		http.Error(w, fmt.Sprintf("Error encoding answer: %v", err), http.StatusInternalServerError)
-	}
-}
-
-func captureAudio(track *webrtc.TrackLocalStaticRTP) {
-	buffer := make([]int16, 1024) // 오디오 데이터를 저장할 버퍼
-	stream, err := portaudio.OpenDefaultStream(1, 0, 44100, 1024, &buffer)
-	if err != nil {
-		fmt.Println("Error opening audio stream:", err)
-		return
-	}
-	defer stream.Close()
-
-	for {
-		err := stream.Read()
+	for _, file := range tsFiles {
+		err := os.Remove(file)
 		if err != nil {
-			fmt.Println("Error reading audio stream:", err)
-			return
-		}
-
-		// RTP 패킷 생성 후 전송
-		pkt := &rtp.Packet{
-			Header:  rtp.Header{Timestamp: uint32(time.Now().UnixNano()), PayloadType: 111},
-			Payload: int16ToBytes(buffer), // 변환 후 Payload에 저장
-		}
-
-		if err := track.WriteRTP(pkt); err != nil {
-			fmt.Println("Error writing RTP packet:", err)
+			log.Printf("Error removing .ts file %s: %v\n", file, err)
+		} else {
+			fmt.Printf("Removed file: %s\n", file)
 		}
 	}
-}
 
-func int16ToBytes(samples []int16) []byte {
-	buf := make([]byte, len(samples)*2)
-	for i, sample := range samples {
-		buf[i*2] = byte(sample & 0xFF)
-		buf[i*2+1] = byte((sample >> 8) & 0xFF)
+	// *.m3u8 파일 삭제
+	m3u8Files, err := filepath.Glob("public/*.m3u8")
+	if err != nil {
+		log.Fatal("Error finding .m3u8 files: ", err)
 	}
-	return buf
+	for _, file := range m3u8Files {
+		err := os.Remove(file)
+		if err != nil {
+			log.Printf("Error removing .m3u8 file %s: %v\n", file, err)
+		} else {
+			fmt.Printf("Removed file: %s\n", file)
+		}
+	}
+
+	// 스트리밍 시작
+	fmt.Println("Start streaming")
+	ffmpegCmd := exec.Command("ffmpeg", ffmpegArgs...)
+	ffmpegCmd.Stdout = os.Stdout
+	ffmpegCmd.Stderr = os.Stderr
+
+	err = ffmpegCmd.Start()
+	if err != nil {
+		log.Fatal("Error starting ffmpeg: ", err)
+	}
+	fmt.Println("Running ffmpeg command: ", strings.Join(ffmpegArgs, " "))
+
+	// 정적 파일 서빙
+	fs := http.FileServer(http.Dir("public")) // 'public' 폴더를 서빙
+	http.Handle("/public/", http.StripPrefix("/public", fs))
+
+	// HTTP 서버 시작
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "public/index.html") // index.html 파일 서빙
+	})
+
+	// 서버 시작
+	fmt.Println("Server started on port 3000")
+	err = http.ListenAndServe(":3000", nil)
+	if err != nil {
+		log.Fatal("Error starting server: ", err)
+	}
 }
