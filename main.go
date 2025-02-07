@@ -148,33 +148,26 @@ func main() {
 			<title>원격 제어 웹</title>
 		</head>
 		<body>
-			<h1>실시간 화면 공유 및 원격 제어</h1>
-			<canvas id="screen" width="1280" height="720"></canvas>
 			<script>
-				const canvas = document.getElementById('screen');
-				const ctx = canvas.getContext('2d');
 				const ws = new WebSocket('ws://' + window.location.host + '/ws');
 
 				ws.binaryType = 'arraybuffer';
 
-				canvas.addEventListener('mousemove', function(event) {
-					const rect = canvas.getBoundingClientRect();
-					const xRatio = (event.clientX - rect.left) / canvas.width;
-					const yRatio = (event.clientY - rect.top) / canvas.height;
+				document.addEventListener('mousemove', function(event) {
+					const xRatio = event.clientX / window.innerWidth;
+					const yRatio = event.clientY / window.innerHeight;
 					ws.send('mousemove:' + xRatio.toFixed(5) + ':' + yRatio.toFixed(5));
 				});
 
-				canvas.addEventListener('mousedown', function(event) {
+				document.addEventListener('mousedown', function(event) {
 					const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : '';
 					if (button) ws.send('mousedown:' + button);
-
 					event.preventDefault();
 				});
 
-				canvas.addEventListener('mouseup', function(event) {
+				document.addEventListener('mouseup', function(event) {
 					const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : '';
 					if (button) ws.send('mouseup:' + button);
-
 					event.preventDefault();
 				});
 
