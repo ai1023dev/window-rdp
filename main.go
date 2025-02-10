@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"image/png"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-vgo/robotgo"
 	"github.com/gorilla/websocket"
@@ -17,6 +20,23 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
+}
+
+// 화면 캡처 함수
+func captureScreen() ([]byte, error) {
+	bounds := screenshot.GetDisplayBounds(0)
+	img, err := screenshot.CaptureRect(bounds)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	err = png.Encode(&buf, img)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
 
 // 웹소켓 핸들러
@@ -34,6 +54,25 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	screenBounds := screenshot.GetDisplayBounds(0)
 	screenWidth := screenBounds.Dx()
 	screenHeight := screenBounds.Dy()
+
+	// 스크린 전송 루틴
+	go func() {
+		for {
+			imgData, err := captureScreen()
+			if err != nil {
+				log.Println("스크린 캡처 오류:", err)
+				break
+			}
+
+			err = conn.WriteMessage(websocket.BinaryMessage, imgData)
+			if err != nil {
+				log.Println("이미지 전송 오류:", err)
+				break
+			}
+
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
 
 	// 메시지 수신 루프
 	for {
@@ -148,26 +187,42 @@ func main() {
 			<title>원격 제어 웹</title>
 		</head>
 		<body>
+			<h1>실시간 화면 공유 및 원격 제어</h1>
+			<canvas id="screen" width="1280" height="720"></canvas>
 			<script>
+				const canvas = document.getElementById('screen');
+				const ctx = canvas.getContext('2d');
 				const ws = new WebSocket('ws://' + window.location.host + '/ws');
 
 				ws.binaryType = 'arraybuffer';
 
-				document.addEventListener('mousemove', function(event) {
-					const xRatio = event.clientX / window.innerWidth;
-					const yRatio = event.clientY / window.innerHeight;
+				ws.onmessage = function(event) {
+					const img = new Image();
+					const blob = new Blob([event.data]);
+					img.src = URL.createObjectURL(blob);
+					img.onload = function() {
+						ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+					};
+				};
+
+				canvas.addEventListener('mousemove', function(event) {
+					const rect = canvas.getBoundingClientRect();
+					const xRatio = (event.clientX - rect.left) / canvas.width;
+					const yRatio = (event.clientY - rect.top) / canvas.height;
 					ws.send('mousemove:' + xRatio.toFixed(5) + ':' + yRatio.toFixed(5));
 				});
 
-				document.addEventListener('mousedown', function(event) {
+				canvas.addEventListener('mousedown', function(event) {
 					const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : '';
 					if (button) ws.send('mousedown:' + button);
+
 					event.preventDefault();
 				});
 
-				document.addEventListener('mouseup', function(event) {
+				canvas.addEventListener('mouseup', function(event) {
 					const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : '';
 					if (button) ws.send('mouseup:' + button);
+
 					event.preventDefault();
 				});
 
